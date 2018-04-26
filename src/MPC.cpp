@@ -21,9 +21,7 @@ double dt = 0.1;
 // This is the length from front to CoG that has a similar radius.
 const double Lf = 2.67;
 
-double ref_cte = 0;
-double ref_epsi = 0;
-double ref_v = 40;
+double ref_v = 70;
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -53,19 +51,20 @@ class FG_eval {
     // `fg` a vector of the cost constraints, `vars` is a vector of variable values (state & actuators)
     // NOTE: You'll probably go back and forth between this function and
     // the Solver function below.
-	fg[0] = 0;
-	
-	// The part of the cost based on the reference state.
+    fg[0] = 0;
+
+    // The part of the cost based on the reference state.
     for (unsigned int t = 0; t < N; t++) {
-      fg[0] += 3000*CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += 3000*CppAD::pow(vars[epsi_start + t], 2);
-      fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += 3300*CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 3300*CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 2*CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
 
     // Minimize the use of actuators.
     for (unsigned int t = 0; t < N - 1; t++) {
       fg[0] += 5*CppAD::pow(vars[delta_start + t], 2);
       fg[0] += 5*CppAD::pow(vars[a_start + t], 2);
+	  
     }
 
     // Minimize the value gap between sequential actuations.
@@ -112,7 +111,7 @@ class FG_eval {
       // Only consider the actuation at time t.
       AD<double> delta0 = vars[delta_start + t - 1];
       AD<double> a0 = vars[a_start + t - 1];
-
+ 
       AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * CppAD::pow(x0,2) + coeffs[3] * CppAD::pow(x0,3);
       AD<double> psides0 = CppAD::atan(3 * coeffs[3] * CppAD::pow(x0,2) + 2 * coeffs[2] * x0 + coeffs[1]);
 
@@ -131,9 +130,9 @@ class FG_eval {
       fg[1 + psi_start + t] = psi1 - (psi0 - v0 * delta0 / Lf * dt);
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
       fg[1 + cte_start + t] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
-      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) - (v0/Lf) * delta0 * dt);
+      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) - v0/Lf * delta0 * dt);
     }
-    std::cout << "Defined cost and constraints" << std::endl;
+    
 	
   }
 };
@@ -182,7 +181,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   vars[cte_start] = cte;
   vars[epsi_start] = epsi;
   
-  std::cout << "Defining variable LB/UB" << std::endl;
+  
   Dvector vars_lowerbound(n_vars);
   Dvector vars_upperbound(n_vars);
   // TODO: Set lower and upper limits for variables.
@@ -197,8 +196,8 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // degrees (values in radians).
   // NOTE: Feel free to change this to something else.
   for (unsigned int i = delta_start; i < a_start; i++) {
-    vars_lowerbound[i] = -0.436332;
-    vars_upperbound[i] = 0.436332 ;
+    vars_lowerbound[i] = -0.236332 * Lf;
+    vars_upperbound[i] = 0.236332 *Lf ;
   }
   
   // Acceleration/decceleration upper and lower limits.
@@ -208,7 +207,6 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
     vars_upperbound[i] = 1.0;
   }
 
-  std::cout << "Defining constraints LB/UB" << std::endl;
   // Lower and upper limits for the constraints
   // Should be 0 besides initial state.
   Dvector constraints_lowerbound(n_constraints);
@@ -232,11 +230,10 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   constraints_upperbound[cte_start] = cte;
   constraints_upperbound[epsi_start] = epsi;
 
-  std::cout << "create object computing objective and constraints" << std::endl;
+  
   // object that computes objective and constraints
   FG_eval fg_eval(coeffs);
 
-  std::cout << "Solving .." << std::endl;
   //
   // NOTE: You don't have to worry about these options
   //
@@ -269,7 +266,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // Cost
   auto cost = solution.obj_value;
   std::cout << "Cost " << cost << std::endl;
-  std::cout << "Formatting result" << std::endl;
+  
   // TODO: Return the first actuator values. The variables can be accessed with
   // `solution.x[i]`.
   //
